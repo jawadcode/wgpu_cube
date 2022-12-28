@@ -1,24 +1,22 @@
-use std::num::NonZeroU32;
-
-use image::GenericImageView;
 use wgpu::{
     include_wgsl,
     util::{BufferInitDescriptor, DeviceExt},
-    AddressMode, Backends, BindGroup, BindGroupDescriptor, BindGroupEntry,
-    BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType, BlendState,
-    Buffer, BufferUsages, ColorTargetState, ColorWrites, CommandEncoderDescriptor,
-    CompositeAlphaMode, Device, DeviceDescriptor, Extent3d, Face, Features, FilterMode,
-    FragmentState, FrontFace, ImageCopyTexture, ImageDataLayout, IndexFormat, Instance, Limits,
-    MultisampleState, Origin3d, PipelineLayoutDescriptor, PolygonMode, PowerPreference,
-    PresentMode, PrimitiveState, PrimitiveTopology, Queue, RenderPassDescriptor, RenderPipeline,
-    RenderPipelineDescriptor, RequestAdapterOptions, SamplerBindingType, SamplerDescriptor,
-    ShaderStages, Surface, SurfaceConfiguration, SurfaceError, TextureAspect, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureSampleType, TextureUsages, TextureViewDescriptor,
+    Backends, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor,
+    BindGroupLayoutEntry, BindingResource, BindingType, BlendState, Buffer, BufferUsages,
+    ColorTargetState, ColorWrites, CommandEncoderDescriptor, CompositeAlphaMode, Device,
+    DeviceDescriptor, Face, Features, FragmentState, FrontFace, IndexFormat, Instance, Limits,
+    MultisampleState, PipelineLayoutDescriptor, PolygonMode, PowerPreference, PresentMode,
+    PrimitiveState, PrimitiveTopology, Queue, RenderPassDescriptor, RenderPipeline,
+    RenderPipelineDescriptor, RequestAdapterOptions, SamplerBindingType, ShaderStages, Surface,
+    SurfaceConfiguration, SurfaceError, TextureSampleType, TextureUsages, TextureViewDescriptor,
     TextureViewDimension,
 };
 use winit::{event::WindowEvent, window::Window};
 
-use crate::vertex::{Vertex, INDICES, VERTICES};
+use crate::{
+    texture::OurTexture,
+    vertex::{Vertex, INDICES, VERTICES},
+};
 
 pub struct State {
     /// A handle to a surface, onto which rendered images can be presented
@@ -38,6 +36,7 @@ pub struct State {
     index_buffer: Buffer,
     num_indices: u32,
     diffuse_bind_group: BindGroup,
+    _diffuse_texture: OurTexture,
 }
 
 impl State {
@@ -84,63 +83,8 @@ impl State {
         surface.configure(&device, &config);
 
         let diffuse_bytes = include_bytes!("happy-tree.png");
-        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
-        let diffuse_rgba = diffuse_image.to_rgba8();
-        let dimensions = diffuse_image.dimensions();
-        let texture_size = Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
-            depth_or_array_layers: 1,
-        };
-        let diffuse_texture = device.create_texture(&TextureDescriptor {
-            // All textures are stored as 3D, we represent our 2D texture by setting depth to 1,
-            size: texture_size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            // Most images are stored using sRGB, so we need to reflect that here
-            format: TextureFormat::Rgba8UnormSrgb,
-            // `TEXTURE_BINDING` means we want to use this texture in shaders
-            // `COPY_DST` means we want to copy data to this texture
-            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-            label: Some("diffuse_texture"),
-        });
-
-        queue.write_texture(
-            ImageCopyTexture {
-                texture: &diffuse_texture,
-                mip_level: 0,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            },
-            // the actual pixel data
-            &diffuse_rgba,
-            // the layout of the texture
-            ImageDataLayout {
-                offset: 0,
-                bytes_per_row: NonZeroU32::new(4 * dimensions.0),
-                rows_per_image: NonZeroU32::new(dimensions.1),
-            },
-            texture_size,
-        );
-
-        // A view into the texture
-        let diffuse_texture_view = diffuse_texture.create_view(&TextureViewDescriptor::default());
-        // How the texture is sampled
-        let diffuse_sampler = device.create_sampler(&SamplerDescriptor {
-            // How to deal with out of bounds accesses in the (https://sotrh.github.io/learn-wgpu/assets/img/address_mode.66a7cd1a.png)
-            address_mode_u: AddressMode::ClampToEdge, // x direction
-            address_mode_v: AddressMode::ClampToEdge, // y direction
-            address_mode_w: AddressMode::ClampToEdge, // z direction
-            // What to do when the sample footprint is smaller or larger than one texel:
-            // Linear  => Select 2 texels in each dimension and return a linear interpolation between their values
-            // Nearest => Return the value of the texel closest to the texture coordinates (desirable if your textures are designed to be pixelated up close)
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            // idk
-            mipmap_filter: FilterMode::Nearest,
-            ..Default::default()
-        });
+        let diffuse_texture =
+            OurTexture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
 
         // We have a bind group layout as it allows us to swap out bind groups on the fly, as long as the layout is the same
         let texture_bind_group_layout =
@@ -172,11 +116,11 @@ impl State {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&diffuse_texture_view),
+                    resource: BindingResource::TextureView(&diffuse_texture.view),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::Sampler(&diffuse_sampler),
+                    resource: BindingResource::Sampler(&diffuse_texture.sampler),
                 },
             ],
             label: Some("diffuse_bind_group"),
@@ -258,6 +202,7 @@ impl State {
             index_buffer,
             num_indices: INDICES.len() as u32,
             diffuse_bind_group,
+            _diffuse_texture: diffuse_texture,
         }
     }
 

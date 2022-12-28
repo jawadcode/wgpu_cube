@@ -7,6 +7,7 @@ use winit::{
 };
 
 pub mod state;
+pub mod texture;
 pub mod vertex;
 
 pub async fn run() {
