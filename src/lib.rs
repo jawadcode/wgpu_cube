@@ -6,6 +6,7 @@ use winit::{
     window::WindowBuilder,
 };
 
+pub mod camera;
 pub mod state;
 pub mod texture;
 pub mod vertex;
@@ -23,7 +24,7 @@ pub async fn run() {
         Event::WindowEvent {
             window_id,
             ref event,
-        } if window_id == window.id() => match event {
+        } if window_id == window.id() && !state.input(event) => match event {
             WindowEvent::CloseRequested
             | WindowEvent::KeyboardInput {
                 input:
@@ -50,7 +51,7 @@ pub async fn run() {
                 // The system is OOM, should probably quit lol
                 Err(SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                 // Any other errors should be resolved by the next frame
-                Err(e) => log::error!("{e:#?}"),
+                Err(e) => log::warn!("{e:#?}"),
             }
         }
         Event::MainEventsCleared => {

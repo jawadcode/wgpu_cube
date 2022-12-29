@@ -67,8 +67,8 @@ impl OurTexture {
             address_mode_u: AddressMode::ClampToEdge,
             address_mode_v: AddressMode::ClampToEdge,
             address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
+            mag_filter: FilterMode::Nearest,
+            min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Nearest,
             ..Default::default()
         });
